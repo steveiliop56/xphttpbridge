@@ -1,13 +1,10 @@
 extern crate xplm;
 
-// use std::thread;
 use xplm::plugin::{Plugin, PluginInfo};
 use xplm::{debugln, xplane_plugin};
 
-use crate::ref_actions::RefActions;
-
 mod config;
-mod ref_actions;
+mod dataref;
 mod server;
 
 struct XPHTTPBridge;
@@ -50,15 +47,24 @@ impl Plugin for XPHTTPBridge {
 
         debugln!("XPHTTPBridge: Config loaded: {:?}", config);
 
-        debugln!("XPHTTPBridge: Setting up ref actions");
-
-        let ref_actions = RefActions::new();
-
         debugln!("XPHTTPBridge: Starting server");
 
         std::thread::spawn(|| {
-            let srv = server::Server::new(config.server, ref_actions);
-            srv.start();
+            let runtime_res = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build();
+
+            let runtime = match runtime_res {
+                Ok(r) => r,
+                Err(e) => {
+                    debugln!("XPHTTPBridge: Failed to create runtime: {}", e);
+                    return;
+                }
+            };
+
+            let srv = server::Server::new(config.server);
+
+            runtime.block_on(async { srv.start().await })
         });
 
         Ok(XPHTTPBridge)
