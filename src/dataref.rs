@@ -1,8 +1,9 @@
-use serde::Serialize;
-use xplm::data::DataRead;
+use serde::{Deserialize, Serialize};
 use xplm::data::borrowed::DataRef;
+use xplm::data::{DataRead, DataReadWrite, DataType, ReadOnly, ReadWrite};
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(untagged)]
 pub enum RefValue {
     Bool(bool),
     F32(f32),
@@ -44,4 +45,32 @@ pub fn get_ref_value(ref_name: &str) -> Option<RefValue> {
         return Some(RefValue::U32(DataRead::<u32>::get(&r)));
     }
     None
+}
+
+pub fn set_ref_value(ref_name: &str, ref_value: RefValue) -> bool {
+    match ref_value {
+        RefValue::Bool(v) => set_ref_value_callback(ref_name, v),
+        RefValue::F32(v) => set_ref_value_callback(ref_name, v),
+        RefValue::F64(v) => set_ref_value_callback(ref_name, v),
+        RefValue::I8(v) => set_ref_value_callback(ref_name, v),
+        RefValue::I16(v) => set_ref_value_callback(ref_name, v),
+        RefValue::I32(v) => set_ref_value_callback(ref_name, v),
+        RefValue::U8(v) => set_ref_value_callback(ref_name, v),
+        RefValue::U16(v) => set_ref_value_callback(ref_name, v),
+        RefValue::U32(v) => set_ref_value_callback(ref_name, v),
+    }
+}
+
+fn set_ref_value_callback<T: DataType>(ref_name: &str, ref_value: T) -> bool
+where
+    DataRef<T, ReadOnly>: DataRead<T>,
+    DataRef<T, ReadWrite>: DataReadWrite<T>,
+{
+    if let Ok(r) = DataRef::<T>::find(ref_name) {
+        if let Ok(mut rw) = r.writeable() {
+            DataReadWrite::<T>::set(&mut rw, ref_value);
+            return true;
+        }
+    }
+    false
 }

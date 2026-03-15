@@ -5,7 +5,7 @@ use xplm::debugln;
 
 use crate::{
     config::ServerConfig,
-    dataref::{RefValue, get_ref_value},
+    dataref::{RefValue, get_ref_value, set_ref_value},
 };
 
 pub struct Server {
@@ -32,6 +32,20 @@ struct GetRefValueResponse {
     pub ref_value: RefValue,
 }
 
+#[derive(Deserialize)]
+struct SetRefValueRequest {
+    ref_name: String,
+    ref_value: RefValue,
+}
+
+#[derive(Serialize)]
+struct SetRefValueResponse {
+    pub status: u16,
+    pub message: String,
+    pub ref_name: String,
+    pub ref_value: RefValue,
+}
+
 impl Server {
     pub fn new(config: ServerConfig) -> Self {
         Self {
@@ -45,7 +59,9 @@ impl Server {
 
         let app = Router::new()
             .route("/api/v1/healthz", get(Server::health_handler))
-            .route("/api/v1/refs/value", post(Server::get_ref_handler));
+            .route("/api/v1/refs/value/get", post(Server::get_ref_handler))
+            .route("/api/v1/refs/value/set", post(Server::set_ref_handler))
+            .fallback(Server::fallback_handler);
 
         let listener_res =
             tokio::net::TcpListener::bind(format!("{}:{}", self.address, self.port)).await;
@@ -78,6 +94,16 @@ impl Server {
         )
     }
 
+    async fn fallback_handler() -> (StatusCode, Json<GenericResponse>) {
+        (
+            StatusCode::NOT_FOUND,
+            Json(GenericResponse {
+                status: 404,
+                message: "not found".to_string(),
+            }),
+        )
+    }
+
     async fn get_ref_handler(
         Json(request): Json<GetRefValueRequest>,
     ) -> (StatusCode, Json<GetRefValueResponse>) {
@@ -104,5 +130,26 @@ impl Server {
                 }),
             )
         }
+    }
+
+    async fn set_ref_handler(
+        Json(request): Json<SetRefValueRequest>,
+    ) -> (StatusCode, Json<SetRefValueResponse>) {
+        let ok = set_ref_value(&request.ref_name, request.ref_value.clone());
+        let status = if ok { 200 } else { 500 };
+        let message = if ok {
+            "OK".to_string()
+        } else {
+            "failed to set ref".to_string()
+        };
+        (
+            StatusCode::from_u16(status).unwrap(),
+            Json(SetRefValueResponse {
+                status,
+                message,
+                ref_name: request.ref_name,
+                ref_value: request.ref_value,
+            }),
+        )
     }
 }
