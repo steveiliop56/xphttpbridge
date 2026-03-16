@@ -93,6 +93,12 @@ struct SetRefValuesResponse {
     pub ref_values: RefValues,
 }
 
+#[derive(Deserialize)]
+struct GetAllRefsRequestParams {
+    // 4 billion should be enough for all datarefs
+    fetch_size: Option<u32>,
+}
+
 #[derive(Serialize)]
 struct GetAllRefsResponse {
     pub status: u16,
@@ -282,6 +288,7 @@ impl Server {
     }
 
     async fn get_all_refs_handler(
+        params: Query<GetAllRefsRequestParams>,
         State(state): State<ServerState>,
     ) -> (StatusCode, Json<GetAllRefsResponse>) {
         let refs = state.server.data_ref_info.clone();
@@ -290,7 +297,10 @@ impl Server {
             Json(GetAllRefsResponse {
                 status: 200,
                 message: "OK".to_string(),
-                refs,
+                refs: refs
+                    .into_iter()
+                    .take(params.fetch_size.unwrap_or(u32::MAX) as usize)
+                    .collect(),
             }),
         )
     }
