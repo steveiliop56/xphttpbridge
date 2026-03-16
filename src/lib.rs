@@ -32,7 +32,13 @@ impl Plugin for XPHTTPBridge {
             .join("xphttpbridge")
             .join("config.ini");
 
+        let data_ref_path = std::path::Path::new(current_dir.as_path())
+            .join("Resources")
+            .join("plugins")
+            .join("DataRefs.txt");
+
         debugln!("XPHTTPBridge: Config path: {:?}", config_path);
+        debugln!("XPHTTPBridge: Data ref path: {:?}", data_ref_path);
 
         // we can panic here since the config path is constructed from known-good paths
         let config_res = config::Config::load(config_path.to_str().unwrap());
@@ -46,6 +52,16 @@ impl Plugin for XPHTTPBridge {
         };
 
         debugln!("XPHTTPBridge: Config loaded: {:?}", config);
+
+        debugln!("XPHTTPBridge: Loading data ref info");
+
+        // same as #43 for unwrapping the data ref path
+        let data_refs = dataref::load_and_parse_datarefs(data_ref_path.to_str().unwrap());
+
+        debugln!(
+            "XPHTTPBridge: Loaded {:?} data ref entries",
+            data_refs.len()
+        );
 
         debugln!("XPHTTPBridge: Starting server");
 
@@ -62,7 +78,7 @@ impl Plugin for XPHTTPBridge {
                 }
             };
 
-            let srv = server::Server::new(config.server);
+            let srv = server::Server::new(config.server, data_refs);
 
             runtime.block_on(async { srv.start().await })
         });

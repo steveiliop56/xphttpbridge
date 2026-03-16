@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+use std::fs::File;
+use std::io::Read;
 use xplm::data::borrowed::DataRef;
 use xplm::data::{
     ArrayRead, ArrayReadWrite, DataRead, DataReadWrite, DataType, ReadOnly, ReadWrite,
@@ -26,6 +28,15 @@ pub enum RefValues {
     SI32(Vec<i32>),
     SU8(Vec<u8>),
     SI8(Vec<i8>),
+}
+
+#[derive(Serialize, Clone)]
+pub struct DataRefInfo {
+    pub ref_name: String,
+    pub ref_type: String,
+    pub writable: bool,
+    pub value_type: String,
+    pub value_description: String,
 }
 
 pub fn get_ref_value(ref_name: &str) -> Option<RefValue> {
@@ -153,4 +164,50 @@ pub fn set_ref_values(ref_name: &str, ref_values: RefValues) -> bool {
             false
         }
     }
+}
+
+pub fn load_and_parse_datarefs(data_ref_path: &str) -> Vec<DataRefInfo> {
+    let file_open_res = File::open(data_ref_path);
+    let mut file = match file_open_res {
+        Ok(f) => f,
+        Err(_) => return Vec::new(),
+    };
+    let mut contents = String::new();
+    let read_res = file.read_to_string(&mut contents);
+    match read_res {
+        Ok(_) => (),
+        Err(_) => return Vec::new(),
+    };
+    let mut data_refs: Vec<DataRefInfo> = Vec::new();
+    let lines = contents.lines();
+    for (index, line) in lines.enumerate() {
+        // Skip the first lines (gen info and empty line)
+        if index == 0 || index == 1 {
+            continue;
+        }
+        if let Some(info) = parse_dataref_line(line) {
+            data_refs.push(info);
+        }
+    }
+    data_refs
+}
+
+fn parse_dataref_line(line: &str) -> Option<DataRefInfo> {
+    let parts: Vec<&str> = line.split_whitespace().collect();
+    if parts.len() < 5 {
+        return None;
+    }
+    let mut final_parts: Vec<&str> = Vec::new();
+    for i in 0..4 {
+        final_parts.push(parts[i]);
+    }
+    let value_description = parts[4..].join(" ");
+    final_parts.push(&value_description);
+    Some(DataRefInfo {
+        ref_name: final_parts[0].to_string(),
+        ref_type: final_parts[1].to_string(),
+        writable: final_parts[2].to_string() == "y",
+        value_type: final_parts[3].to_string(),
+        value_description: final_parts[4].to_string(),
+    })
 }

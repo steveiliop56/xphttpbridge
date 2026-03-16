@@ -1,16 +1,28 @@
-use axum::{Json, Router, extract::Query, http::StatusCode, routing::get, routing::post};
+use axum::{
+    Json, Router, extract::Query, extract::State, http::StatusCode, routing::get, routing::post,
+};
 use serde::{Deserialize, Serialize};
 use tokio;
 use xplm::debugln;
 
 use crate::{
     config::ServerConfig,
-    dataref::{RefValue, RefValues, get_ref_value, get_ref_values, set_ref_value, set_ref_values},
+    dataref::{
+        DataRefInfo, RefValue, RefValues, get_ref_value, get_ref_values, set_ref_value,
+        set_ref_values,
+    },
 };
 
+#[derive(Clone)]
 pub struct Server {
     pub port: u16,
     pub address: String,
+    pub data_ref_info: Vec<DataRefInfo>,
+}
+
+#[derive(Clone)]
+struct ServerState {
+    server: Server,
 }
 
 #[derive(Serialize)]
@@ -81,16 +93,28 @@ struct SetRefValuesResponse {
     pub ref_values: RefValues,
 }
 
+#[derive(Serialize)]
+struct GetAllRefsResponse {
+    pub status: u16,
+    pub message: String,
+    pub refs: Vec<DataRefInfo>,
+}
+
 impl Server {
-    pub fn new(config: ServerConfig) -> Self {
+    pub fn new(config: ServerConfig, data_ref_info: Vec<DataRefInfo>) -> Self {
         Self {
             port: config.port,
             address: config.address,
+            data_ref_info,
         }
     }
 
-    pub async fn start(&self) {
+    pub async fn start(self) {
         debugln!("XPHTTPBridge: Creating app");
+
+        let state = ServerState {
+            server: self.clone(),
+        };
 
         let app = Router::new()
             .route("/api/v1/healthz", get(Server::health_handler))
@@ -104,7 +128,9 @@ impl Server {
                 "/api/v1/refs/values/set",
                 post(Server::set_ref_multiple_handler),
             )
-            .fallback(Server::fallback_handler);
+            .route("/api/v1/refs/all", get(Server::get_all_refs_handler))
+            .fallback(Server::fallback_handler)
+            .with_state(state);
 
         let listener_res =
             tokio::net::TcpListener::bind(format!("{}:{}", self.address, self.port)).await;
@@ -251,6 +277,20 @@ impl Server {
                 message,
                 ref_name: ref_name,
                 ref_values: request.ref_values,
+            }),
+        )
+    }
+
+    async fn get_all_refs_handler(
+        State(state): State<ServerState>,
+    ) -> (StatusCode, Json<GetAllRefsResponse>) {
+        let refs = state.server.data_ref_info.clone();
+        (
+            StatusCode::from_u16(200).unwrap(),
+            Json(GetAllRefsResponse {
+                status: 200,
+                message: "OK".to_string(),
+                refs,
             }),
         )
     }
