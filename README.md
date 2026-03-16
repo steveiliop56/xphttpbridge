@@ -48,7 +48,7 @@ X-Plane 11/Resources/plugins/XPHTTPBridge/
 ├── 64/
 │   ├── lin.xpl   (Linux)
 │   ├── win.xpl   (Windows)
-│   └── osx.xpl   (macOS)
+│   └── mac.xpl   (macOS)
 ├── config.ini
 ├── LICENSE
 └── README.md

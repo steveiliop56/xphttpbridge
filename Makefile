@@ -32,7 +32,7 @@ copy-win:
 	cp target/debug/xphttpbridge.dll XPHTTPBridge/64/win.xpl
 
 copy-osx:
-	cp target/debug/libxphttpbridge.dylib XPHTTPBridge/64/osx.xpl
+	cp target/debug/libxphttpbridge.dylib XPHTTPBridge/64/mac.xpl
 
 
 build: clean setup-plugin
