@@ -13,8 +13,6 @@ impl Plugin for XPHTTPBridge {
     type Error = std::convert::Infallible;
 
     fn start() -> Result<Self, Self::Error> {
-        debugln!("XPHTTPBridge: Reading config");
-
         let current_dir_res = std::env::current_dir();
         let current_dir = match current_dir_res {
             Ok(dir) => dir,
@@ -24,13 +22,22 @@ impl Plugin for XPHTTPBridge {
             }
         };
 
-        debugln!("XPHTTPBridge: Current directory: {:?}", current_dir);
-
-        let config_path = std::path::Path::new(current_dir.as_path())
+        let plugin_dir = std::path::Path::new(current_dir.as_path())
             .join("Resources")
             .join("plugins")
-            .join("xphttpbridge")
-            .join("config.ini");
+            .join("XPHTTPBridge");
+
+        if !plugin_dir.exists() {
+            debugln!(
+                "XPHTTPBridge: Plugin directory does not exist or it's not correct: {:?}",
+                plugin_dir
+            );
+            return Ok(XPHTTPBridge);
+        }
+
+        debugln!("XPHTTPBridge: Current directory: {:?}", current_dir);
+
+        let config_path = std::path::Path::new(plugin_dir.as_path()).join("config.ini");
 
         let data_ref_path = std::path::Path::new(current_dir.as_path())
             .join("Resources")
@@ -40,7 +47,6 @@ impl Plugin for XPHTTPBridge {
         debugln!("XPHTTPBridge: Config path: {:?}", config_path);
         debugln!("XPHTTPBridge: Data ref path: {:?}", data_ref_path);
 
-        // we can panic here since the config path is constructed from known-good paths
         let config_res = config::Config::load(config_path.to_str().unwrap());
 
         let config = match config_res {
@@ -51,11 +57,10 @@ impl Plugin for XPHTTPBridge {
             }
         };
 
-        debugln!("XPHTTPBridge: Config loaded: {:?}", config);
+        debugln!("XPHTTPBridge: Config loaded");
 
         debugln!("XPHTTPBridge: Loading data ref info");
 
-        // same as #43 for unwrapping the data ref path
         let data_refs = dataref::load_and_parse_datarefs(data_ref_path.to_str().unwrap());
 
         debugln!(
