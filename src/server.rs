@@ -1,11 +1,11 @@
-use axum::{Json, Router, http::StatusCode, routing::get, routing::post};
+use axum::{Json, Router, extract::Query, http::StatusCode, routing::get, routing::post};
 use serde::{Deserialize, Serialize};
 use tokio;
 use xplm::debugln;
 
 use crate::{
     config::ServerConfig,
-    dataref::{RefValue, get_ref_value, set_ref_value},
+    dataref::{RefValue, RefValues, get_ref_value, get_ref_values, set_ref_value, set_ref_values},
 };
 
 pub struct Server {
@@ -20,7 +20,7 @@ struct GenericResponse {
 }
 
 #[derive(Deserialize)]
-struct GetRefValueRequest {
+struct GetRefValueRequestParams {
     ref_name: String,
 }
 
@@ -33,8 +33,12 @@ struct GetRefValueResponse {
 }
 
 #[derive(Deserialize)]
-struct SetRefValueRequest {
+struct SetRefValueRequestParams {
     ref_name: String,
+}
+
+#[derive(Deserialize)]
+struct SetRefValueRequestBody {
     ref_value: RefValue,
 }
 
@@ -44,6 +48,37 @@ struct SetRefValueResponse {
     pub message: String,
     pub ref_name: String,
     pub ref_value: RefValue,
+}
+
+#[derive(Deserialize)]
+struct GetRefValuesRequestParams {
+    ref_name: String,
+}
+
+#[derive(Serialize)]
+struct GetRefValuesResponse {
+    pub status: u16,
+    pub message: String,
+    pub ref_name: String,
+    pub ref_values: RefValues,
+}
+
+#[derive(Deserialize)]
+struct SetRefValuesRequestParams {
+    ref_name: String,
+}
+
+#[derive(Deserialize)]
+struct SetRefValuesRequestBody {
+    ref_values: RefValues,
+}
+
+#[derive(Serialize)]
+struct SetRefValuesResponse {
+    pub status: u16,
+    pub message: String,
+    pub ref_name: String,
+    pub ref_values: RefValues,
 }
 
 impl Server {
@@ -59,8 +94,16 @@ impl Server {
 
         let app = Router::new()
             .route("/api/v1/healthz", get(Server::health_handler))
-            .route("/api/v1/refs/value/get", post(Server::get_ref_handler))
+            .route("/api/v1/refs/value/get", get(Server::get_ref_handler))
             .route("/api/v1/refs/value/set", post(Server::set_ref_handler))
+            .route(
+                "/api/v1/refs/values/get",
+                get(Server::get_ref_multiple_handler),
+            )
+            .route(
+                "/api/v1/refs/values/set",
+                post(Server::set_ref_multiple_handler),
+            )
             .fallback(Server::fallback_handler);
 
         let listener_res =
@@ -105,9 +148,11 @@ impl Server {
     }
 
     async fn get_ref_handler(
-        Json(request): Json<GetRefValueRequest>,
+        params: Query<GetRefValueRequestParams>,
     ) -> (StatusCode, Json<GetRefValueResponse>) {
-        let ref_value = get_ref_value(&request.ref_name);
+        let params: GetRefValueRequestParams = params.0;
+        let ref_name = params.ref_name;
+        let ref_value = get_ref_value(&ref_name);
 
         if let Some(ref_value) = ref_value {
             (
@@ -115,7 +160,7 @@ impl Server {
                 Json(GetRefValueResponse {
                     status: 200,
                     message: "OK".to_string(),
-                    ref_name: request.ref_name,
+                    ref_name: ref_name,
                     ref_value,
                 }),
             )
@@ -125,17 +170,50 @@ impl Server {
                 Json(GetRefValueResponse {
                     status: 404,
                     message: "ref not found".to_string(),
-                    ref_name: request.ref_name,
+                    ref_name: ref_name,
                     ref_value: RefValue::F32(0.0),
                 }),
             )
         }
     }
 
+    async fn get_ref_multiple_handler(
+        params: Query<GetRefValuesRequestParams>,
+    ) -> (StatusCode, Json<GetRefValuesResponse>) {
+        let params: GetRefValuesRequestParams = params.0;
+        let ref_name = params.ref_name;
+        let ref_values = get_ref_values(&ref_name);
+
+        if let Some(ref_values) = ref_values {
+            (
+                StatusCode::OK,
+                Json(GetRefValuesResponse {
+                    status: 200,
+                    message: "OK".to_string(),
+                    ref_name: ref_name,
+                    ref_values,
+                }),
+            )
+        } else {
+            (
+                StatusCode::NOT_FOUND,
+                Json(GetRefValuesResponse {
+                    status: 404,
+                    message: "ref not found".to_string(),
+                    ref_name: ref_name,
+                    ref_values: RefValues::SF32(vec![]),
+                }),
+            )
+        }
+    }
+
     async fn set_ref_handler(
-        Json(request): Json<SetRefValueRequest>,
+        params: Query<SetRefValueRequestParams>,
+        Json(request): Json<SetRefValueRequestBody>,
     ) -> (StatusCode, Json<SetRefValueResponse>) {
-        let ok = set_ref_value(&request.ref_name, request.ref_value.clone());
+        let params: SetRefValueRequestParams = params.0;
+        let ref_name = params.ref_name;
+        let ok = set_ref_value(&ref_name, request.ref_value.clone());
         let status = if ok { 200 } else { 500 };
         let message = if ok {
             "OK".to_string()
@@ -147,8 +225,32 @@ impl Server {
             Json(SetRefValueResponse {
                 status,
                 message,
-                ref_name: request.ref_name,
+                ref_name: ref_name,
                 ref_value: request.ref_value,
+            }),
+        )
+    }
+
+    async fn set_ref_multiple_handler(
+        params: Query<SetRefValuesRequestParams>,
+        Json(request): Json<SetRefValuesRequestBody>,
+    ) -> (StatusCode, Json<SetRefValuesResponse>) {
+        let params: SetRefValuesRequestParams = params.0;
+        let ref_name = params.ref_name;
+        let ok = set_ref_values(&ref_name, request.ref_values.clone());
+        let status = if ok { 200 } else { 500 };
+        let message = if ok {
+            "OK".to_string()
+        } else {
+            "failed to set ref".to_string()
+        };
+        (
+            StatusCode::from_u16(status).unwrap(),
+            Json(SetRefValuesResponse {
+                status,
+                message,
+                ref_name: ref_name,
+                ref_values: request.ref_values,
             }),
         )
     }

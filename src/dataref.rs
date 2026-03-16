@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use xplm::data::borrowed::DataRef;
-use xplm::data::{DataRead, DataReadWrite, DataType, ReadOnly, ReadWrite};
+use xplm::data::{
+    ArrayRead, ArrayReadWrite, DataRead, DataReadWrite, DataType, ReadOnly, ReadWrite,
+};
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(untagged)]
@@ -14,6 +16,16 @@ pub enum RefValue {
     U8(u8),
     U16(u16),
     U32(u32),
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum RefValues {
+    SF32(Vec<f32>),
+    SU32(Vec<u32>),
+    SI32(Vec<i32>),
+    SU8(Vec<u8>),
+    SI8(Vec<i8>),
 }
 
 pub fn get_ref_value(ref_name: &str) -> Option<RefValue> {
@@ -73,4 +85,72 @@ where
         }
     }
     false
+}
+pub fn get_ref_values(ref_name: &str) -> Option<RefValues> {
+    if let Ok(r) = DataRef::<[f32]>::find(ref_name) {
+        return Some(RefValues::SF32(r.as_vec()));
+    }
+    if let Ok(r) = DataRef::<[u32]>::find(ref_name) {
+        return Some(RefValues::SU32(r.as_vec()));
+    }
+    if let Ok(r) = DataRef::<[i32]>::find(ref_name) {
+        return Some(RefValues::SI32(r.as_vec()));
+    }
+    if let Ok(r) = DataRef::<[u8]>::find(ref_name) {
+        return Some(RefValues::SU8(r.as_vec()));
+    }
+    if let Ok(r) = DataRef::<[i8]>::find(ref_name) {
+        return Some(RefValues::SI8(r.as_vec()));
+    }
+    None
+}
+
+pub fn set_ref_values(ref_name: &str, ref_values: RefValues) -> bool {
+    match ref_values {
+        RefValues::SF32(v) => {
+            if let Ok(r) = DataRef::<[f32]>::find(ref_name) {
+                if let Ok(mut rw) = r.writeable() {
+                    rw.set(&v);
+                    return true;
+                }
+            }
+            false
+        }
+        RefValues::SU32(v) => {
+            if let Ok(r) = DataRef::<[u32]>::find(ref_name) {
+                if let Ok(mut rw) = r.writeable() {
+                    rw.set(&v);
+                    return true;
+                }
+            }
+            false
+        }
+        RefValues::SI32(v) => {
+            if let Ok(r) = DataRef::<[i32]>::find(ref_name) {
+                if let Ok(mut rw) = r.writeable() {
+                    rw.set(&v);
+                    return true;
+                }
+            }
+            false
+        }
+        RefValues::SU8(v) => {
+            if let Ok(r) = DataRef::<[u8]>::find(ref_name) {
+                if let Ok(mut rw) = r.writeable() {
+                    rw.set(&v);
+                    return true;
+                }
+            }
+            false
+        }
+        RefValues::SI8(v) => {
+            if let Ok(r) = DataRef::<[i8]>::find(ref_name) {
+                if let Ok(mut rw) = r.writeable() {
+                    rw.set(&v);
+                    return true;
+                }
+            }
+            false
+        }
+    }
 }
