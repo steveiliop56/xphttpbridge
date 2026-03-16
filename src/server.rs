@@ -41,7 +41,7 @@ struct GetRefValueResponse {
     pub status: u16,
     pub message: String,
     pub ref_name: String,
-    pub ref_value: RefValue,
+    pub ref_value: Option<RefValue>,
 }
 
 #[derive(Deserialize)]
@@ -72,7 +72,7 @@ struct GetRefValuesResponse {
     pub status: u16,
     pub message: String,
     pub ref_name: String,
-    pub ref_values: RefValues,
+    pub ref_values: Option<RefValues>,
 }
 
 #[derive(Deserialize)]
@@ -193,7 +193,7 @@ impl Server {
                     status: 200,
                     message: "OK".to_string(),
                     ref_name: ref_name,
-                    ref_value,
+                    ref_value: Some(ref_value),
                 }),
             )
         } else {
@@ -203,7 +203,7 @@ impl Server {
                     status: 404,
                     message: "ref not found".to_string(),
                     ref_name: ref_name,
-                    ref_value: RefValue::F32(0.0),
+                    ref_value: None,
                 }),
             )
         }
@@ -223,7 +223,7 @@ impl Server {
                     status: 200,
                     message: "OK".to_string(),
                     ref_name: ref_name,
-                    ref_values,
+                    ref_values: Some(ref_values),
                 }),
             )
         } else {
@@ -233,7 +233,7 @@ impl Server {
                     status: 404,
                     message: "ref not found".to_string(),
                     ref_name: ref_name,
-                    ref_values: RefValues::SF32(vec![]),
+                    ref_values: None,
                 }),
             )
         }
