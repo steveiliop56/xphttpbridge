@@ -23,7 +23,7 @@ A lightweight [X-Plane 11](https://www.x-plane.com/) plugin written in Rust that
 Clone the repository and run:
 
 ```sh
-make build
+BUILD_TYPE=release make build
 ```
 
 This will:

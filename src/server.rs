@@ -1,5 +1,13 @@
 use axum::{
-    Json, Router, extract::Query, extract::State, http::StatusCode, routing::get, routing::post,
+    Json, Router,
+    extract::Query,
+    extract::Request,
+    extract::State,
+    http::StatusCode,
+    middleware::{Next, from_fn},
+    response::Response,
+    routing::get,
+    routing::post,
 };
 use serde::{Deserialize, Serialize};
 use tokio;
@@ -8,8 +16,8 @@ use xplm::debugln;
 use crate::{
     config::ServerConfig,
     dataref::{
-        DataRefInfo, RefValue, RefValues, get_ref_value, get_ref_values, set_ref_value,
-        set_ref_values,
+        DataRefInfo, RefValue, RefValues, get_ref_value, get_ref_values,
+        map_string_to_ref_value_type, map_string_to_ref_values_type, set_ref_value, set_ref_values,
     },
 };
 
@@ -18,6 +26,7 @@ pub struct Server {
     pub port: u16,
     pub address: String,
     pub data_ref_info: Vec<DataRefInfo>,
+    pub data_ref_type_map: ahash::AHashMap<String, String>,
 }
 
 #[derive(Clone)]
@@ -107,11 +116,16 @@ struct GetAllRefsResponse {
 }
 
 impl Server {
-    pub fn new(config: ServerConfig, data_ref_info: Vec<DataRefInfo>) -> Self {
+    pub fn new(
+        config: ServerConfig,
+        data_ref_info: Vec<DataRefInfo>,
+        data_ref_type_map: ahash::AHashMap<String, String>,
+    ) -> Self {
         Self {
             port: config.port,
             address: config.address,
             data_ref_info,
+            data_ref_type_map,
         }
     }
 
@@ -135,6 +149,7 @@ impl Server {
                 post(Server::set_ref_multiple_handler),
             )
             .route("/api/v1/refs/all", get(Server::get_all_refs_handler))
+            .layer(from_fn(Server::time_middleware))
             .fallback(Server::fallback_handler)
             .with_state(state);
 
@@ -179,12 +194,62 @@ impl Server {
         )
     }
 
+    async fn time_middleware(req: Request, next: Next) -> Response {
+        let timer = std::time::Instant::now();
+        let req_path = req.uri().path().to_string();
+        let res = next.run(req).await;
+        let elapsed = timer.elapsed();
+        let res_code = res.status();
+        debugln!(
+            "XPHTTPBridge: Request to {} took {} us and returned {}",
+            req_path,
+            elapsed.as_micros(),
+            res_code
+        );
+        res
+    }
+
     async fn get_ref_handler(
         params: Query<GetRefValueRequestParams>,
+        State(state): State<ServerState>,
     ) -> (StatusCode, Json<GetRefValueResponse>) {
         let params: GetRefValueRequestParams = params.0;
         let ref_name = params.ref_name;
-        let ref_value = get_ref_value(&ref_name);
+        let ref_type = state.server.data_ref_type_map.get(&ref_name);
+
+        if ref_type.is_none() {
+            debugln!("XPHTTPBridge: Ref {} not found in type map", ref_name);
+            return (
+                StatusCode::NOT_FOUND,
+                Json(GetRefValueResponse {
+                    status: 404,
+                    message: "ref not found".to_string(),
+                    ref_name: ref_name,
+                    ref_value: None,
+                }),
+            );
+        }
+
+        let type_map_res = map_string_to_ref_value_type(ref_type.unwrap().as_str());
+
+        if type_map_res.is_none() {
+            debugln!(
+                "XPHTTPBridge: Ref {} has unsupported type {}",
+                ref_name,
+                ref_type.unwrap()
+            );
+            return (
+                StatusCode::NOT_FOUND,
+                Json(GetRefValueResponse {
+                    status: 404,
+                    message: "ref type not supported".to_string(),
+                    ref_name: ref_name,
+                    ref_value: None,
+                }),
+            );
+        }
+
+        let ref_value = get_ref_value(&ref_name, type_map_res.unwrap());
 
         if let Some(ref_value) = ref_value {
             (
@@ -211,10 +276,45 @@ impl Server {
 
     async fn get_ref_multiple_handler(
         params: Query<GetRefValuesRequestParams>,
+        State(state): State<ServerState>,
     ) -> (StatusCode, Json<GetRefValuesResponse>) {
         let params: GetRefValuesRequestParams = params.0;
         let ref_name = params.ref_name;
-        let ref_values = get_ref_values(&ref_name);
+        let ref_type = state.server.data_ref_type_map.get(&ref_name);
+
+        if ref_type.is_none() {
+            debugln!("XPHTTPBridge: Ref {} not found in type map", ref_name);
+            return (
+                StatusCode::NOT_FOUND,
+                Json(GetRefValuesResponse {
+                    status: 404,
+                    message: "ref not found".to_string(),
+                    ref_name: ref_name,
+                    ref_values: None,
+                }),
+            );
+        }
+
+        let type_map_res = map_string_to_ref_values_type(ref_type.unwrap().as_str());
+
+        if type_map_res.is_none() {
+            debugln!(
+                "XPHTTPBridge: Ref {} has unsupported type {}",
+                ref_name,
+                ref_type.unwrap()
+            );
+            return (
+                StatusCode::NOT_FOUND,
+                Json(GetRefValuesResponse {
+                    status: 404,
+                    message: "ref type not supported".to_string(),
+                    ref_name: ref_name,
+                    ref_values: None,
+                }),
+            );
+        }
+
+        let ref_values = get_ref_values(&ref_name, type_map_res.unwrap());
 
         if let Some(ref_values) = ref_values {
             (

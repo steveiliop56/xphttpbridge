@@ -68,6 +68,8 @@ impl Plugin for XPHTTPBridge {
             data_refs.len()
         );
 
+        let data_ref_type_map = dataref::compile_dataref_type_map(data_refs.clone());
+
         debugln!("XPHTTPBridge: Starting server");
 
         std::thread::spawn(|| {
@@ -83,7 +85,7 @@ impl Plugin for XPHTTPBridge {
                 }
             };
 
-            let srv = server::Server::new(config.server, data_refs);
+            let srv = server::Server::new(config.server, data_refs, data_ref_type_map);
 
             runtime.block_on(async { srv.start().await })
         });
