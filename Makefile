@@ -1,4 +1,5 @@
 OS_TYPE := ""
+BUILD_TYPE := debug
 
 ifeq ($(OS),Windows_NT)
     OS_TYPE := win
@@ -26,18 +27,19 @@ setup-plugin:
 	cp README.md XPHTTPBridge/README.md
 
 copy-linux:
-	cp target/debug/libxphttpbridge.so XPHTTPBridge/64/lin.xpl
+	cp target/$(BUILD_TYPE)/libxphttpbridge.so XPHTTPBridge/64/lin.xpl
 
 copy-win:
-	cp target/debug/xphttpbridge.dll XPHTTPBridge/64/win.xpl
+	cp target/$(BUILD_TYPE)/xphttpbridge.dll XPHTTPBridge/64/win.xpl
 
 copy-osx:
-	cp target/debug/libxphttpbridge.dylib XPHTTPBridge/64/mac.xpl
+	cp target/$(BUILD_TYPE)/libxphttpbridge.dylib XPHTTPBridge/64/mac.xpl
 
 
 build: clean setup-plugin
 	echo "Building for $(OS_TYPE)"
-	cargo build
+	if [ "$(BUILD_TYPE)" = "debug" ]; then cargo build; fi
+	if [ "$(BUILD_TYPE)" = "release" ]; then cargo build --release; fi
 	if [ "$(OS_TYPE)" = "linux" ]; then $(MAKE) copy-linux; fi
 	if [ "$(OS_TYPE)" = "win" ]; then $(MAKE) copy-win; fi
 	if [ "$(OS_TYPE)" = "osx" ]; then $(MAKE) copy-osx; fi
